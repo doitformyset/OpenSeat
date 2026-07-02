@@ -1,0 +1,4 @@
+.venv/
+page.html
+*.db
+__pycache__/
