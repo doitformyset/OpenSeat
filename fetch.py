@@ -1,7 +1,12 @@
-import requests
-from bs4 import BeautifulSoup
+import os
 import sqlite3
 from datetime import datetime
+
+import requests
+from bs4 import BeautifulSoup
+
+
+NTFY_TOPIC = os.getenv("OPENSEAT_NTFY_TOPIC")
 
 
 def get_seat_availability(term, crn):
@@ -47,6 +52,7 @@ def get_seat_availability(term, crn):
             return capacity, actual, remaining
 
     raise Exception(f"No Seats row found for term {term}, CRN {crn}.")
+
 
 def initialize_database():
     connection = sqlite3.connect("openseat.db")
@@ -104,7 +110,44 @@ def save_current(term, crn, capacity, actual, remaining):
         VALUES (?, ?, ?, ?, ?, ?)
     """, (term, crn, capacity, actual, remaining, last_checked))
     connection.commit()
-    connection.close()    
+    connection.close()   
+
+def notify(event_type, section, previous_remaining, current_remaining):
+    if event_type != "seat_opened":
+        return
+    
+    if not NTFY_TOPIC:
+        raise RuntimeError(
+            "OPENSEAT_NTFY_TOPIC is not set. " 
+            "Set it in PowerShell with: "
+            '$env:OPENSEAT_NTFY_TOPIC="your_topic"'
+            )
+    
+    message = (
+        f"Seat opened for {section['course']}-{section['section']}\n"
+        f"{section['title']}\n"
+        f"Term: {section['term']}\n"
+        f"CRN: {section['crn']}\n"
+        f"Remaining Seats: {previous_remaining} -> {current_remaining}"
+    )
+    
+    response = requests.post(
+        f"https://ntfy.sh/{NTFY_TOPIC}",
+        data=message.encode("utf-8"),
+        headers={
+            "Title": "OpenSeat Alert",
+            "Priority": "urgent",
+            "Tags": "rotating_light",
+        },
+        timeout=20,
+    )
+
+    if response.status_code >= 400:
+        raise RuntimeError(
+            f"ntfy notification failed with status code {response.status_code}: {response.text}"
+        )
+    
+    print("Notification sent.")
 
 initialize_database()
 
@@ -146,10 +189,14 @@ for section in watchlist:
 
         if previous_remaining is None:
             print("Status: First time checking this section. Saving baseline.")
+        
         elif previous_remaining == 0 and remaining > 0:
             print("Status: SEAT OPENED!")
+            notify("seat_opened", section, previous_remaining, remaining)
+        
         elif previous_remaining > 0 and remaining == 0:
             print("Status: Section is now full.")
+        
         else:
             print("Status: No alert-worthy change.")
         
