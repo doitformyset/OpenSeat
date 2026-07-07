@@ -2,3 +2,4 @@
 page.html
 *.db
 __pycache__/
+logs/

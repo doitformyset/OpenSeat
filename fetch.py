@@ -1,12 +1,51 @@
 import os
 import sqlite3
 from datetime import datetime
+import logging
+from logging.handlers import TimedRotatingFileHandler
 
 import requests
 from bs4 import BeautifulSoup
 
 
 NTFY_TOPIC = os.getenv("OPENSEAT_NTFY_TOPIC")
+
+LOG_DIR = "logs"
+LOG_FILE = os.path.join(LOG_DIR, "openseat.log")
+
+def setup_logger():
+    os.makedirs(LOG_DIR, exist_ok=True)
+
+    logger = logging.getLogger("openseat")
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+    logger.handlers.clear()
+
+    file_handler = TimedRotatingFileHandler(
+        LOG_FILE,
+        when="midnight",
+        interval=1,
+        backupCount=14,
+        encoding="utf-8",
+    )
+
+    console_handler = logging.StreamHandler()
+
+    formatter = logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+
+    return logger
+
+logger = setup_logger()
 
 
 def get_seat_availability(term, crn):
@@ -73,6 +112,7 @@ def initialize_database():
     connection.commit()
     connection.close()
 
+
 def load_previous(term, crn):
     connection = sqlite3.connect("openseat.db")
     cursor = connection.cursor()
@@ -109,8 +149,10 @@ def save_current(term, crn, capacity, actual, remaining):
         )
         VALUES (?, ?, ?, ?, ?, ?)
     """, (term, crn, capacity, actual, remaining, last_checked))
+    
     connection.commit()
     connection.close()   
+
 
 def notify(event_type, section, previous_remaining, current_remaining):
     if event_type != "seat_opened":
@@ -121,7 +163,7 @@ def notify(event_type, section, previous_remaining, current_remaining):
             "OPENSEAT_NTFY_TOPIC is not set. " 
             "Set it in PowerShell with: "
             '$env:OPENSEAT_NTFY_TOPIC="your_topic"'
-            )
+        )
     
     message = (
         f"Seat opened for {section['course']}-{section['section']}\n"
@@ -147,7 +189,15 @@ def notify(event_type, section, previous_remaining, current_remaining):
             f"ntfy notification failed with status code {response.status_code}: {response.text}"
         )
     
-    print("Notification sent.")
+    logger.info(
+        "event=notification_sent course=%s-%s term=%s crn=%s previous_remaining=%s current_remaining=%s",
+        section['course'],
+        section['section'],
+        section['term'],
+        section['crn'],
+        previous_remaining,
+        current_remaining,
+    )
 
 initialize_database()
 
@@ -168,6 +218,8 @@ watchlist = [
     },
 ]
 
+logger.info("event=run_started sections=%s", len(watchlist))
+
 for section in watchlist:
     term = section["term"]
     crn = section["crn"]
@@ -180,36 +232,74 @@ for section in watchlist:
 
         previous_remaining = load_previous(term, crn)
 
-        print("Course:", f"{course}-{section_num}: {title}")
-        print("Term:", term)
-        print("CRN:", crn)
-        print("Capacity:", capacity)
-        print("Actual:", actual)
-        print("Remaining:", remaining)
-
         if previous_remaining is None:
-            print("Status: First time checking this section. Saving baseline.")
-        
+            logger.info(
+                "event=baseline_saved course=%s-%s title=%r term=%s crn=%s capacity=%s actual=%s remaining=%s",
+                course,
+                section_num,
+                title,
+                term,
+                crn,
+                capacity,
+                actual,
+                remaining,
+            )
         elif previous_remaining == 0 and remaining > 0:
-            print("Status: SEAT OPENED!")
+            logger.warning(
+                "event=seat_opened course=%s-%s title=%r term=%s crn=%s previous_remaining=%s current_remaining=%s capacity=%s actual=%s",
+                course,
+                section_num,
+                title,
+                term,
+                crn,
+                previous_remaining,
+                remaining,
+                capacity,
+                actual,
+            )
             notify("seat_opened", section, previous_remaining, remaining)
         
         elif previous_remaining > 0 and remaining == 0:
-            print("Status: Section is now full.")
-        
+            logger.warning(
+                "event=section_filled course=%s-%s title=%r term=%s crn=%s previous_remaining=%s current_remaining=%s capacity=%s actual=%s",
+                course,
+                section_num,
+                title,
+                term,
+                crn,
+                previous_remaining,
+                remaining,
+                capacity,
+                actual,
+            )
+
+
         else:
-            print("Status: No alert-worthy change.")
-        
+            logger.info(
+                "event=no_change course=%s-%s title=%r term=%s crn=%s previous_remaining=%s current_remaining=%s capacity=%s actual=%s",
+                course,
+                section_num,
+                title,
+                term,
+                crn,
+                previous_remaining,
+                remaining,
+                capacity,
+                actual,
+            )
         save_current(term, crn, capacity, actual, remaining)
 
-        print("-" * 30)
 
     except Exception as error:
-
-        print("Error checking section:")
-        print("Course:", f"{course}-{section_num}: {title}")
-        print("Term:", term)
-        print("CRN:", crn)
-        print("Error:", error)
-        print("-" * 30)
+        logger.error(
+            "event=check_failed course=%s-%s title=%r term=%s crn=%s error=%r",
+            course,
+            section_num,
+            title,
+            term,
+            crn,
+            error,
+        )
         continue
+
+logger.info("event=run_finished")
