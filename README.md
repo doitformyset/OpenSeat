@@ -31,11 +31,11 @@ If a section previously had 0 seats and now has more than 0, OpenSeat sends an n
 ## Example Log Output
 
 ```text
-2026-07-07 17:05:27 - INFO - openseat - event=run_started sections=2
-2026-07-07 17:05:28 - WARNING - openseat - event=seat_opened course=CS 120-01 title='Introduction to Programming using C++' term=202710 crn=14402 previous_remaining=0 current_remaining=9 capacity=35 actual=26
-2026-07-07 17:05:29 - INFO - openseat - event=notification_sent course=CS 120-01 term=202710 crn=14402 previous_remaining=0 current_remaining=9
-2026-07-07 17:05:29 - INFO - openseat - event=no_change course=COSC 1145L-01 title='Comp. Program. in Python Lab' term=202710 crn=14401 previous_remaining=23 current_remaining=23 capacity=30 actual=7
-2026-07-07 17:05:30 - INFO - openseat - event=run_finished
+2026-07-07 23:04:40 - INFO - openseat - event=watchlist_loaded path=watchlist.json sections=2
+2026-07-07 23:04:40 - INFO - openseat - event=run_started sections=2
+2026-07-07 23:04:41 - INFO - openseat - event=no_change course=CS 120-01 title='Introduction to Programming using C++' term=202710 crn=14402 previous_remaining=9 current_remaining=9 capacity=35 actual=26
+2026-07-07 23:04:42 - INFO - openseat - event=no_change course=COSC 1145L-01 title='Comp. Program. in Python Lab' term=202710 crn=14401 previous_remaining=23 current_remaining=23 capacity=30 actual=7
+2026-07-07 23:04:42 - INFO - openseat - event=run_finished
 ```
 
 ## Setup
@@ -77,9 +77,31 @@ PowerShell:
 $env:OPENSEAT_NTFY_TOPIC="your-random-topic-name"
 ```
 
-5. Edit the watchlist in `monitor.py`.
+5. Create your watchlist.
 
-The current MVP uses a hardcoded watchlist inside `monitor.py`. Each watched section needs a term and CRN, which can be found from TSU Banner's class schedule search.
+Copy the example watchlist file.
+
+```powershell
+Copy-Item watchlist.example.json watchlist.json
+```
+
+Edit `watchlist.json` with the sections you want to monitor. Each watched section needs a `term` and `crn`, which can be found from TSU Banner's class schedule search.
+
+Example:
+
+```json
+[
+  {
+    "term": "202710",
+    "crn": "14402",
+    "course": "CS 120",
+    "section": "01",
+    "title": "Introduction to Programming using C++"
+  }
+]
+```
+
+`term` and `crn` are required. `course`, `section`, and `title` are optional labels used for cleaner logs and notifications.
 
 6. Run the monitor.
 
@@ -89,7 +111,6 @@ python monitor.py
 
 ## Roadmap
 
-* Move the hardcoded watchlist to `watchlist.json` with validation
 * Add support for additional Banner-based schools
 * Explore HCC support, which may require Playwright because HCC uses PeopleSoft instead of the same Banner page flow
 * Deploy OpenSeat on a Linux VM or home lab with cron
