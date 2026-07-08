@@ -3,6 +3,8 @@ import sqlite3
 from datetime import datetime
 import logging
 from logging.handlers import TimedRotatingFileHandler
+import json
+import sys
 
 import requests
 from bs4 import BeautifulSoup
@@ -46,6 +48,81 @@ def setup_logger():
     return logger
 
 logger = setup_logger()
+
+
+def load_watchlist(path="watchlist.json"):
+    try:
+        with open(path, "r", encoding="utf-8") as file:
+            data = json.load(file)
+
+    except FileNotFoundError:
+        logger.error("event=watchlist_missing path=%s", path)
+        sys.exit(1)
+
+    except json.JSONDecodeError as error:
+        logger.error(
+            "event=watchlist_json_invalid path=%s line=%s column=%s message=%s",
+            path, 
+            error.lineno, 
+            error.colno, 
+            error.msg,
+        )
+        sys.exit(1)
+
+    if not isinstance(data, list):
+        logger.error(
+            "event=watchlist_structure_invalid path=%s expected=list actual=%s",
+            path,
+            type(data).__name__,
+        )
+        sys.exit(1)
+    
+    valid_entries = []
+
+    for index, entry in enumerate(data):
+        if not isinstance(entry, dict):
+            logger.error(
+                "event=watchlist_entry_invalid index=%s reason=not_object actual=%s",
+                index,
+                type(entry).__name__,
+            )
+            continue
+
+        missing_fields = []
+
+        for field in ("term", "crn"):
+            if not entry.get(field):
+                missing_fields.append(field)
+
+        if missing_fields:
+            logger.error(
+                "event=watchlist_entry_invalid index=%s missing=%s",
+                index,
+                ",".join(missing_fields),
+            )
+            continue
+
+        valid_entries.append(
+            {
+                "term": str(entry["term"]),
+                "crn": str(entry["crn"]),
+                "course": entry.get("course", "Unknown course"),
+                "section": entry.get("section", "Unknown section"),
+                "title": entry.get("title", "Unknown title"),
+            }
+        )
+
+    if not valid_entries:
+        logger.error("event=watchlist_empty path=%s valid_entries=0", path)
+        sys.exit(1)
+    
+    logger.info(
+        "event=watchlist_loaded path=%s sections=%s",
+        path,
+        len(valid_entries),
+    )
+
+    return valid_entries
 
 
 def get_seat_availability(term, crn):
@@ -202,22 +279,7 @@ def notify(event_type, section, previous_remaining, current_remaining):
 
 initialize_database()
 
-watchlist = [
-    {
-        "term": "202710", 
-        "crn": "14402", 
-        "course": "CS 120",
-        "section": "01",
-        "title": "Introduction to Programming using C++"
-    },
-    {
-        "term": "202710", 
-        "crn": "14401",
-        "course": "COSC 1145L",
-        "section": "01",
-        "title": "Comp. Program. in Python Lab"
-    },
-]
+watchlist = load_watchlist("watchlist.json")
 
 logger.info("event=run_started sections=%s", len(watchlist))
 

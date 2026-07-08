@@ -3,3 +3,4 @@ page.html
 *.db
 __pycache__/
 logs/
+watchlist.json

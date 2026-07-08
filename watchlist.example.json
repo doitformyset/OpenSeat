@@ -1,0 +1,16 @@
+[
+  {
+    "term": "202710",
+    "crn": "14402",
+    "course": "CS 120",
+    "section": "01",
+    "title": "Introduction to Programming using C++"
+  },
+  {
+    "term": "202710",
+    "crn": "14401",
+    "course": "COSC 1145L",
+    "section": "01",
+    "title": "Comp. Program. in Python Lab"
+  }
+]
