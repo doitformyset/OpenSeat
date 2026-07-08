@@ -132,6 +132,7 @@ def load_previous(term, crn):
     
     return row[0]
 
+
 def save_current(term, crn, capacity, actual, remaining):
     connection = sqlite3.connect("openseat.db")
     cursor = connection.cursor()
@@ -257,8 +258,22 @@ for section in watchlist:
                 capacity,
                 actual,
             )
-            notify("seat_opened", section, previous_remaining, remaining)
-        
+
+            try:
+                notify("seat_opened", section, previous_remaining, remaining)
+            except Exception:
+                logger.exception(
+                    "event=notification_failed course=%s-%s title=%r term=%s crn=%s previous_remaining=%s current_remaining=%s", 
+                    course,
+                    section_num,
+                    title,
+                    term,
+                    crn,
+                    previous_remaining,
+                    remaining,
+                )
+                continue
+            
         elif previous_remaining > 0 and remaining == 0:
             logger.warning(
                 "event=section_filled course=%s-%s title=%r term=%s crn=%s previous_remaining=%s current_remaining=%s capacity=%s actual=%s",
@@ -290,15 +305,14 @@ for section in watchlist:
         save_current(term, crn, capacity, actual, remaining)
 
 
-    except Exception as error:
-        logger.error(
-            "event=check_failed course=%s-%s title=%r term=%s crn=%s error=%r",
+    except Exception:
+        logger.exception(
+            "event=check_failed course=%s-%s title=%r term=%s crn=%s",
             course,
             section_num,
             title,
             term,
             crn,
-            error,
         )
         continue
 
