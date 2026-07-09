@@ -78,6 +78,7 @@ def load_watchlist(path="watchlist.json"):
         sys.exit(1)
     
     valid_entries = []
+    seen = set()
 
     for index, entry in enumerate(data):
         if not isinstance(entry, dict):
@@ -102,10 +103,26 @@ def load_watchlist(path="watchlist.json"):
             )
             continue
 
+        term = str(entry["term"])
+        crn = str(entry["crn"])
+
+        key = (term, crn)
+
+        if key in seen:
+            logger.error(
+                "event=watchlist_entry_duplicate index=%s term=%s crn=%s",
+                index,
+                term,
+                crn,
+            )
+            continue
+
+        seen.add(key)
+
         valid_entries.append(
             {
-                "term": str(entry["term"]),
-                "crn": str(entry["crn"]),
+                "term": term,
+                "crn": crn,
                 "course": entry.get("course", "Unknown course"),
                 "section": entry.get("section", "Unknown section"),
                 "title": entry.get("title", "Unknown title"),
