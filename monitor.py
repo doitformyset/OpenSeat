@@ -294,55 +294,41 @@ def notify(event_type, section, previous_remaining, current_remaining):
         current_remaining,
     )
 
-initialize_database()
 
-watchlist = load_watchlist("watchlist.json")
+def main():
+    initialize_database()
 
-logger.info("event=run_started sections=%s", len(watchlist))
+    watchlist = load_watchlist("watchlist.json")
 
-for section in watchlist:
-    term = section["term"]
-    crn = section["crn"]
-    course = section["course"]
-    section_num = section["section"]
-    title = section["title"]
+    logger.info("event=run_started sections=%s", len(watchlist))
 
-    try:
-        capacity, actual, remaining = get_seat_availability(term, crn)
+    for section in watchlist:
+        term = section["term"]
+        crn = section["crn"]
+        course = section["course"]
+        section_num = section["section"]
+        title = section["title"]
 
-        previous_remaining = load_previous(term, crn)
+        try:
+            capacity, actual, remaining = get_seat_availability(term, crn)
 
-        if previous_remaining is None:
-            logger.info(
-                "event=baseline_saved course=%s-%s title=%r term=%s crn=%s capacity=%s actual=%s remaining=%s",
-                course,
-                section_num,
-                title,
-                term,
-                crn,
-                capacity,
-                actual,
-                remaining,
-            )
-        elif previous_remaining == 0 and remaining > 0:
-            logger.warning(
-                "event=seat_opened course=%s-%s title=%r term=%s crn=%s previous_remaining=%s current_remaining=%s capacity=%s actual=%s",
-                course,
-                section_num,
-                title,
-                term,
-                crn,
-                previous_remaining,
-                remaining,
-                capacity,
-                actual,
-            )
+            previous_remaining = load_previous(term, crn)
 
-            try:
-                notify("seat_opened", section, previous_remaining, remaining)
-            except Exception:
-                logger.exception(
-                    "event=notification_failed course=%s-%s title=%r term=%s crn=%s previous_remaining=%s current_remaining=%s", 
+            if previous_remaining is None:
+                logger.info(
+                    "event=baseline_saved course=%s-%s title=%r term=%s crn=%s capacity=%s actual=%s remaining=%s",
+                    course,
+                    section_num,
+                    title,
+                    term,
+                    crn,
+                    capacity,
+                    actual,
+                    remaining,
+                )
+            elif previous_remaining == 0 and remaining > 0:
+                logger.warning(
+                    "event=seat_opened course=%s-%s title=%r term=%s crn=%s previous_remaining=%s current_remaining=%s capacity=%s actual=%s",
                     course,
                     section_num,
                     title,
@@ -350,49 +336,68 @@ for section in watchlist:
                     crn,
                     previous_remaining,
                     remaining,
+                    capacity,
+                    actual,
                 )
-                continue
-            
-        elif previous_remaining > 0 and remaining == 0:
-            logger.warning(
-                "event=section_filled course=%s-%s title=%r term=%s crn=%s previous_remaining=%s current_remaining=%s capacity=%s actual=%s",
+
+                try:
+                    notify("seat_opened", section, previous_remaining, remaining)
+                except Exception:
+                    logger.exception(
+                        "event=notification_failed course=%s-%s title=%r term=%s crn=%s previous_remaining=%s current_remaining=%s", 
+                        course,
+                        section_num,
+                        title,
+                        term,
+                        crn,
+                        previous_remaining,
+                        remaining,
+                    )
+                    continue
+                
+            elif previous_remaining > 0 and remaining == 0:
+                logger.warning(
+                    "event=section_filled course=%s-%s title=%r term=%s crn=%s previous_remaining=%s current_remaining=%s capacity=%s actual=%s",
+                    course,
+                    section_num,
+                    title,
+                    term,
+                    crn,
+                    previous_remaining,
+                    remaining,
+                    capacity,
+                    actual,
+                )
+
+
+            else:
+                logger.info(
+                    "event=no_change course=%s-%s title=%r term=%s crn=%s previous_remaining=%s current_remaining=%s capacity=%s actual=%s",
+                    course,
+                    section_num,
+                    title,
+                    term,
+                    crn,
+                    previous_remaining,
+                    remaining,
+                    capacity,
+                    actual,
+                )
+            save_current(term, crn, capacity, actual, remaining)
+
+
+        except Exception:
+            logger.exception(
+                "event=check_failed course=%s-%s title=%r term=%s crn=%s",
                 course,
                 section_num,
                 title,
                 term,
                 crn,
-                previous_remaining,
-                remaining,
-                capacity,
-                actual,
             )
+            continue
 
+    logger.info("event=run_finished")
 
-        else:
-            logger.info(
-                "event=no_change course=%s-%s title=%r term=%s crn=%s previous_remaining=%s current_remaining=%s capacity=%s actual=%s",
-                course,
-                section_num,
-                title,
-                term,
-                crn,
-                previous_remaining,
-                remaining,
-                capacity,
-                actual,
-            )
-        save_current(term, crn, capacity, actual, remaining)
-
-
-    except Exception:
-        logger.exception(
-            "event=check_failed course=%s-%s title=%r term=%s crn=%s",
-            course,
-            section_num,
-            title,
-            term,
-            crn,
-        )
-        continue
-
-logger.info("event=run_finished")
+if __name__ == "__main__":
+    main()
