@@ -4,3 +4,4 @@ page.html
 __pycache__/
 logs/
 watchlist.json
+.env
