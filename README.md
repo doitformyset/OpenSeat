@@ -109,9 +109,32 @@ Example:
 python monitor.py
 ```
 
+## Deployment
+
+OpenSeat is currently deployed on a headless Ubuntu Server VM running in VirtualBox. The monitor runs unattended every 10 minutes through cron.
+
+The deployment uses:
+
+* A Python virtual environment for isolated dependencies
+* A local `.env` file for the private ntfy topic
+* A local `watchlist.json` file for watched course sections
+* SQLite for persistent seat-state tracking
+* Structured application logs in `logs/openseat.log`
+* Cron output captured in `logs/cron.log` to catch failures that occur before application logging starts
+
+The cron job changes into the project directory, exports the environment variables from `.env`, runs the monitor with the virtual environment's Python interpreter, and captures standard output and errors.
+
+```cron
+*/10 * * * * cd /home/your-user/OpenSeat && set -a && . /home/your-user/OpenSeat/.env && set +a && /home/your-user/OpenSeat/.venv/bin/python /home/your-user/OpenSeat/monitor.py >> /home/your-user/OpenSeat/logs/cron.log 2>&1
+```
+
+A controlled end-to-end deployment test confirmed that a cron-initiated run could detect a staged `0 -> 7` seat-opening transition, send an ntfy alert, and save the updated seat count back to SQLite without a manual script run.
+
+This is currently a personal home-lab deployment. OpenSeat only performs checks while the Windows host, VirtualBox VM, and network connection are active.
+
 ## Roadmap
 
+* Add automated tests for parsing, state transitions, and notification behavior
 * Add support for additional Banner-based schools
 * Explore HCC support, which may require Playwright because HCC uses PeopleSoft instead of the same Banner page flow
-* Deploy OpenSeat on a Linux VM or home lab with cron
 * Explore self-hosted ntfy for notifications
